@@ -14,7 +14,7 @@ from datetime import datetime
 import pandas as pd
 console = Console()
 
-plt.style.use("Solarize_Light2")
+
 
 @partial(jit, static_argnums=(2,))
 def simulate_price_path(key, params, time_horizon):
@@ -32,29 +32,52 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
 
     fig, ax = plt.subplots(figsize=(20, 12))  # Increased figure size to accommodate legend
     
+    # Set Notion theme colors
+    notion_colors = {
+        'background': '#F4F4F4',
+        'text': '#333333',
+        'primary': '#2E8DEF',
+        'secondary': '#A3BFFA',
+        'accent': '#FF6B6B',
+        'muted': '#D9D9D9',
+        'key_line_1': '#FFA500', # Orange
+        'key_line_2': '#800080', # Purple
+        'key_line_3': '#008000', # Green
+        'key_line_4': '#FF0000'  # Red
+    }
+    
+    # Set plot background and text colors
+    fig.patch.set_facecolor(notion_colors['background'])
+    ax.set_facecolor(notion_colors['background'])
+    ax.tick_params(colors=notion_colors['text'])
+    ax.spines['bottom'].set_color(notion_colors['text'])
+    ax.spines['top'].set_color(notion_colors['text'])
+    ax.spines['right'].set_color(notion_colors['text'])
+    ax.spines['left'].set_color(notion_colors['text'])
+    
     # Plot simulations with reduced alpha for clarity
-    ax.plot(date_range, simulations.T, alpha=0.02, color='lightgray')
+    ax.plot(date_range, simulations.T, alpha=0.02, color=notion_colors['muted'])
     
     # Plot median projection
     median_projection = np.median(simulations, axis=0)
-    ax.plot(date_range, median_projection, color='blue', linewidth=2, label='Median Projection')
+    ax.plot(date_range, median_projection, color=notion_colors['primary'], linewidth=2, label='Median Projection')
     
     # Plot confidence interval
     ax.fill_between(date_range, 
                     np.percentile(simulations, 5, axis=0), 
                     np.percentile(simulations, 95, axis=0), 
-                    color='skyblue', alpha=0.3, label='90% Confidence Interval')
+                    color=notion_colors['secondary'], alpha=0.3, label='90% Confidence Interval')
 
     # Plot key price levels
-    ax.axhline(y=mean_price, color='green', linestyle='--', linewidth=2, label='Mean Projected Price')
-    ax.axhline(y=percentile_5, color='red', linestyle='--', linewidth=2, label='5th Percentile')
-    ax.axhline(y=percentile_95, color='purple', linestyle='--', linewidth=2, label='95th Percentile')
-    ax.axhline(y=current_price, color='orange', linestyle='-', linewidth=2, label='Starting Price (Current)')
+    ax.axhline(y=mean_price, color=notion_colors['key_line_1'], linestyle='--', linewidth=2, label='Mean Projected Price')
+    ax.axhline(y=percentile_5, color=notion_colors['key_line_2'], linestyle='--', linewidth=2, label='5th Percentile')
+    ax.axhline(y=percentile_95, color=notion_colors['key_line_3'], linestyle='--', linewidth=2, label='95th Percentile')
+    ax.axhline(y=current_price, color=notion_colors['key_line_4'], linestyle='-', linewidth=2, label='Current Price')
 
     # Customize the plot
-    ax.set_title(f'Monte Carlo Simulation: {ticker} Stock Price Projection', fontsize=20, fontweight='bold')
-    ax.set_xlabel('Date', fontsize=14)
-    ax.set_ylabel('Stock Price ($)', fontsize=14)
+    ax.set_title(f'Monte Carlo Simulation: {ticker} Stock Price Projection', fontsize=20, fontweight='bold', color=notion_colors['text'])
+    ax.set_xlabel('Date', fontsize=14, color=notion_colors['text'])
+    ax.set_ylabel('Stock Price ($)', fontsize=14, color=notion_colors['text'])
     
     # Format x-axis to show dates and set limits
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
@@ -66,72 +89,41 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'${x:,.0f}'))
 
     # Customize grid
-    ax.grid(True, linestyle='--', alpha=0.7)
+    ax.grid(True, linestyle='--', alpha=0.7, color=notion_colors['muted'])
 
     # Add text annotations for key stats
-    ax.text(0.95, 0.95, f'Current Price: ${current_price:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='orange', alpha=0.8))
-    ax.text(0.95, 0.90, f'Mean Projected Price: ${mean_price:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='green', alpha=0.8))
-    ax.text(0.95, 0.85, f'5th Percentile: ${percentile_5:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
-    ax.text(0.95, 0.80, f'95th Percentile: ${percentile_95:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='purple', alpha=0.8))
-    ax.text(0.95, 0.75, f'Median Projection: ${median_projection[-1]:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='blue', alpha=0.8))
+    ax.text(0.95, 0.95, f'Current Price: ${current_price:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor=notion_colors['background'], edgecolor=notion_colors['key_line_4'], boxstyle='round,pad=0.5', alpha=0.8), color=notion_colors['key_line_4'])
+    ax.text(0.95, 0.90, f'Mean Projected Price: ${mean_price:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor=notion_colors['background'], edgecolor=notion_colors['key_line_1'], boxstyle='round,pad=0.5', alpha=0.8), color=notion_colors['key_line_1'])
+    ax.text(0.95, 0.85, f'5th Percentile: ${percentile_5:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor=notion_colors['background'], edgecolor=notion_colors['key_line_2'], boxstyle='round,pad=0.5', alpha=0.8), color=notion_colors['key_line_2'])
+    ax.text(0.95, 0.80, f'95th Percentile: ${percentile_95:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor=notion_colors['background'], edgecolor=notion_colors['key_line_3'], boxstyle='round,pad=0.5', alpha=0.8), color=notion_colors['key_line_3'])
+    ax.text(0.95, 0.75, f'Median Projection: ${median_projection[-1]:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor=notion_colors['background'], edgecolor=notion_colors['primary'], boxstyle='round,pad=0.5', alpha=0.8), color=notion_colors['primary'])
 
     # Function to add side annotations with arrows
     def add_side_annotation(y, label, color):
         return ax.annotate(label, xy=(1.02, y), xycoords=('axes fraction', 'data'),
                     va='center', ha='left', fontsize=10, fontweight='bold',
-                    bbox=dict(boxstyle='round,pad=0.5', fc='white', ec=color, alpha=0.8),
+                    bbox=dict(boxstyle='round,pad=0.5', fc=notion_colors['background'], ec=color, alpha=0.8),
                     arrowprops=dict(arrowstyle='->', connectionstyle='arc3,rad=0', color=color))
-
-    # Create annotations
-    annotations = [
-        (current_price, 'Starting Price (Current)', 'orange'),
-        (mean_price, 'Mean Projected Price', 'green'),
-        (percentile_5, '5th Percentile', 'red'),
-        (percentile_95, '95th Percentile', 'purple'),
-        (median_projection[-1], 'Median Projection', 'blue'),
-        ((percentile_5 + percentile_95) / 2, '90% Confidence Interval', 'skyblue')
-    ]
-
-    # Sort annotations by y-value
-    annotations.sort(key=lambda x: x[0])
-
-    # Add annotations with overlap prevention
-    added_annotations = []
-    min_gap = 0.03  # Minimum gap between annotations (in axes coordinates)
-    for y, label, color in annotations:
-        annotation = add_side_annotation(y, label, color)
-        
-        # Check for overlap and adjust position if necessary
-        if added_annotations:
-            last_anno = added_annotations[-1]
-            current_pos = annotation.get_position()[1]
-            last_pos = last_anno.get_position()[1]
-            if abs(current_pos - last_pos) < min_gap:
-                new_y = last_pos - min_gap
-                annotation.set_position((annotation.get_position()[0], new_y))
-                annotation.xy = (annotation.xy[0], new_y)
-        
-        added_annotations.append(annotation)
 
     # Add legend
     ax.legend(loc='upper left', bbox_to_anchor=(0.05, 0.95), fontsize=12, 
-              fancybox=True, shadow=True, ncol=1)
+              fancybox=True, shadow=True, ncol=1, framealpha=1, edgecolor=notion_colors['text'], facecolor=notion_colors['background'])
 
     # Add text to clearly indicate future projection
     ax.text(0.5, 0.02, f'Future Price Projections ({time_horizon} trading days)', transform=ax.transAxes, 
-            fontsize=16, color='red', ha='center', va='bottom',
-            bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
+            fontsize=16, color=notion_colors['accent'], ha='center', va='bottom',
+            bbox=dict(facecolor=notion_colors['background'], edgecolor=notion_colors['accent'], boxstyle='round,pad=0.5', alpha=0.8))
 
     plt.tight_layout()
     fig.savefig(f"{ticker}_monte_carlo_projection.png", dpi=300, bbox_inches='tight')
 
 def main():
     # Download stock data
-    ticker = "SPY"
-    start_date = "2022-01-01"
+    ticker = "NVDA"
+    start_date = "2020-01-01"
     end_date = "2024-08-07"
-    num_simulations = 100
-    time_horizon = 252  # One trading year
+    num_simulations = 2000000
+    time_horizon = 756  # 3 trading years
     stock = yf.Ticker(ticker)
     hist = stock.history(start=start_date, end=end_date)
 
