@@ -1,0 +1,6 @@
+yfinance
+jax
+jaxlib
+numpy
+matplotlib
+rich
