@@ -120,9 +120,11 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
 
 def main():
     # Download stock data
-    ticker = "TSLA"
+    ticker = "SPY"
     start_date = "2022-01-01"
     end_date = "2024-08-07"
+    num_simulations = 10000
+    time_horizon = 252  # One trading year
     stock = yf.Ticker(ticker)
     hist = stock.history(start=start_date, end=end_date)
 
@@ -140,9 +142,6 @@ def main():
     annual_return = log_returns.mean() * 252
     annual_volatility = log_returns.std() * jnp.sqrt(252)
 
-    # Set up Monte Carlo simulation parameters
-    num_simulations = 10000
-    time_horizon = 252  # One trading year
     last_price = hist['Close'].iloc[-1]
 
     # Perform Monte Carlo simulation using JAX
