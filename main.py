@@ -10,11 +10,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.layout import Layout
 from functools import partial
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
-from matplotlib.ticker import FuncFormatter
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 console = Console()
 
@@ -27,7 +23,7 @@ def simulate_price_path(key, params, time_horizon):
     return last_price * jnp.exp(jnp.cumsum(daily_returns))
 
 
-def plot_monte_carlo_results(simulations, time_horizon, last_price, current_price, mean_price, percentile_5, percentile_95, ticker, start_date):
+def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, percentile_5, percentile_95, ticker):
     # Get the present date
     present_date = datetime.now().date()
     
@@ -206,7 +202,7 @@ def main():
     console.print(f"Potential Return from Current Price {current_price}: [bold green]{potential_return_current:.2f}%[/bold green]")
 
     # Plot results with improved visualization
-    plot_monte_carlo_results(simulations, time_horizon, last_price, current_price, mean_price, percentile_5, percentile_95, ticker, start_date)
+    plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, percentile_5, percentile_95, ticker)
 
 if __name__ == '__main__':
     main()
