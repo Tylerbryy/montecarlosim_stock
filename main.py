@@ -68,6 +68,13 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
     # Customize grid
     ax.grid(True, linestyle='--', alpha=0.7)
 
+    # Add text annotations for key stats
+    ax.text(0.95, 0.95, f'Current Price: ${current_price:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='orange', alpha=0.8))
+    ax.text(0.95, 0.90, f'Mean Projected Price: ${mean_price:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='green', alpha=0.8))
+    ax.text(0.95, 0.85, f'5th Percentile: ${percentile_5:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
+    ax.text(0.95, 0.80, f'95th Percentile: ${percentile_95:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='purple', alpha=0.8))
+    ax.text(0.95, 0.75, f'Median Projection: ${median_projection[-1]:.2f}', transform=ax.transAxes, fontsize=12, va='top', ha='right', bbox=dict(facecolor='white', edgecolor='blue', alpha=0.8))
+
     # Function to add side annotations with arrows
     def add_side_annotation(y, label, color):
         return ax.annotate(label, xy=(1.02, y), xycoords=('axes fraction', 'data'),
@@ -116,14 +123,14 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
             bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
 
     plt.tight_layout()
-    plt.show()
+    fig.savefig(f"{ticker}_monte_carlo_projection.png", dpi=300, bbox_inches='tight')
 
 def main():
     # Download stock data
     ticker = "SPY"
     start_date = "2022-01-01"
     end_date = "2024-08-07"
-    num_simulations = 10000
+    num_simulations = 100
     time_horizon = 252  # One trading year
     stock = yf.Ticker(ticker)
     hist = stock.history(start=start_date, end=end_date)
