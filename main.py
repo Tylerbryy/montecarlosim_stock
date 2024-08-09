@@ -14,7 +14,7 @@ from datetime import datetime
 import pandas as pd
 console = Console()
 
-plt.style.use("_mpl-gallery")
+plt.style.use("Solarize_Light2")
 
 @partial(jit, static_argnums=(2,))
 def simulate_price_path(key, params, time_horizon):
