@@ -125,13 +125,13 @@ def plot_monte_carlo_results(simulations, time_horizon, last_price, current_pric
 def main():
     # Download stock data
     ticker = "TSLA"
-    start_date = "2008-01-01"
+    start_date = "2022-01-01"
     end_date = "2024-08-07"
     stock = yf.Ticker(ticker)
     hist = stock.history(start=start_date, end=end_date)
 
     # Get current stock price
-    current_price = stock.info['currentPrice']
+    current_price = stock.info.get('currentPrice', stock.info['regularMarketPreviousClose'])
 
     # Check for any missing values
     hist.isnull().sum()
