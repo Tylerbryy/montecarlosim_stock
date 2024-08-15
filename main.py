@@ -12,16 +12,17 @@ from rich.layout import Layout
 from functools import partial
 from datetime import datetime
 import pandas as pd
+import yaml
+
 console = Console()
 
-plt.style.use("Solarize_Light2")
+plt.style.use("seaborn-v0_8-muted")
 
 @partial(jit, static_argnums=(2,))
 def simulate_price_path(key, params, time_horizon):
     annual_return, annual_volatility, last_price = params
     daily_returns = random.normal(key, shape=(time_horizon,)) * (annual_volatility/jnp.sqrt(252)) + (annual_return/252)
     return last_price * jnp.exp(jnp.cumsum(daily_returns))
-
 
 def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, percentile_5, percentile_95, ticker):
     # Get the present date
@@ -98,89 +99,96 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
     fig.savefig(f"{ticker}_monte_carlo_projection.png", dpi=300, bbox_inches='tight')
 
 def main():
-    # Download stock data
-    ticker = "SPY"
-    start_date = "2022-01-01"
-    end_date = "2024-08-07"
-    num_simulations = 100000
-    time_horizon = 252  # One trading year
-    stock = yf.Ticker(ticker)
-    hist = stock.history(start=start_date, end=end_date)
+    # Load configuration from YAML file
+    with open("config.yaml", "r") as file:
+        config = yaml.safe_load(file)
 
-    # Get current stock price
-    current_price = stock.info.get('currentPrice', stock.info['regularMarketPreviousClose'])
+    num_simulations = config['num_simulations']
+    time_horizon = config['time_horizon']
 
-    # Check for any missing values
-    hist.isnull().sum()
+    for stock_config in config['stocks']:
+        ticker = stock_config['ticker']
+        start_date = stock_config['start_date']
+        end_date = stock_config['end_date']
 
-    # Calculate daily log returns using numpy, then convert to jax array
-    log_returns = np.log(hist['Close'] / hist['Close'].shift(1)).dropna().values
-    log_returns = jnp.array(log_returns)
+        # Download stock data
+        stock = yf.Ticker(ticker)
+        hist = stock.history(start=start_date, end=end_date)
 
-    # Calculate annualized mean and volatility
-    annual_return = log_returns.mean() * 252
-    annual_volatility = log_returns.std() * jnp.sqrt(252)
+        # Get current stock price
+        current_price = stock.info.get('currentPrice', stock.info['regularMarketPreviousClose'])
 
-    last_price = hist['Close'].iloc[-1]
+        # Check for any missing values
+        hist.isnull().sum()
 
-    # Perform Monte Carlo simulation using JAX
-    key = random.PRNGKey(0)
-    keys = random.split(key, num_simulations)
-    
-    params = (annual_return, annual_volatility, last_price)
-    simulate_batch = vmap(simulate_price_path, in_axes=(0, None, None))
-    simulations = simulate_batch(keys, params, time_horizon)
+        # Calculate daily log returns using numpy, then convert to jax array
+        log_returns = np.log(hist['Close'] / hist['Close'].shift(1)).dropna().values
+        log_returns = jnp.array(log_returns)
 
-    # Calculate statistics
-    final_prices = simulations[:, -1]
-    mean_price = jnp.mean(final_prices)
-    median_price = jnp.median(final_prices)
-    std_dev = jnp.std(final_prices)
-    percentile_5 = jnp.percentile(final_prices, 5)
-    percentile_95 = jnp.percentile(final_prices, 95)
+        # Calculate annualized mean and volatility
+        annual_return = log_returns.mean() * 252
+        annual_volatility = log_returns.std() * jnp.sqrt(252)
 
-    # Calculate upside potential
-    upside_potential = (mean_price - current_price) / current_price * 100
+        last_price = hist['Close'].iloc[-1]
 
-    # Create a rich table for results
-    table = Table(title=f"Monte Carlo Analysis Results for {ticker}")
-    table.add_column("Metric", style="cyan", no_wrap=True)
-    table.add_column("Value", style="magenta")
+        # Perform Monte Carlo simulation using JAX
+        key = random.PRNGKey(0)
+        keys = random.split(key, num_simulations)
+        
+        params = (annual_return, annual_volatility, last_price)
+        simulate_batch = vmap(simulate_price_path, in_axes=(0, None, None))
+        simulations = simulate_batch(keys, params, time_horizon)
 
-    table.add_row("Current Price", f"${current_price:.2f}")
-    table.add_row("Starting Price", f"${last_price:.2f}")
-    table.add_row("Mean Projected Price", f"${mean_price:.2f}")
-    table.add_row("Median Projected Price", f"${median_price:.2f}")
-    table.add_row("Standard Deviation", f"${std_dev:.2f}")
-    table.add_row("5th Percentile", f"${percentile_5:.2f}")
-    table.add_row("95th Percentile", f"${percentile_95:.2f}")
-    table.add_row("Upside Potential", f"{upside_potential:.2f}%")
+        # Calculate statistics
+        final_prices = simulations[:, -1]
+        mean_price = jnp.mean(final_prices)
+        median_price = jnp.median(final_prices)
+        std_dev = jnp.std(final_prices)
+        percentile_5 = jnp.percentile(final_prices, 5)
+        percentile_95 = jnp.percentile(final_prices, 95)
 
-    # Create a table for Monte Carlo configuration
-    config_table = Table(title="Monte Carlo Configuration")
-    config_table.add_column("Parameter", style="cyan", no_wrap=True)
-    config_table.add_column("Value", style="magenta")
-    config_table.add_row("Number of Simulations", f"{num_simulations:,}")
-    config_table.add_row("Time Horizon (Trading Days)", f"{time_horizon}")
-    config_table.add_row("Annual Return", f"{annual_return:.4f}")
-    config_table.add_row("Annual Volatility", f"{annual_volatility:.4f}")
+        # Calculate upside potential
+        upside_potential = (mean_price - current_price) / current_price * 100
 
-    layout = Layout()
-    layout.split_row(
-        Layout(name="table", ratio=2),
-        Layout(name="config_table", ratio=1)
-    )
-    layout["table"].update(Panel(table, title=f"Monte Carlo Analysis for {ticker}"))
-    layout["config_table"].update(Panel(config_table))
+        # Create a rich table for results
+        table = Table(title=f"Monte Carlo Analysis Results for {ticker}")
+        table.add_column("Metric", style="cyan", no_wrap=True)
+        table.add_column("Value", style="magenta")
 
-    console.print(layout)
+        table.add_row("Current Price", f"${current_price:.2f}")
+        table.add_row("Starting Price", f"${last_price:.2f}")
+        table.add_row("Mean Projected Price", f"${mean_price:.2f}")
+        table.add_row("Median Projected Price", f"${median_price:.2f}")
+        table.add_row("Standard Deviation", f"${std_dev:.2f}")
+        table.add_row("5th Percentile", f"${percentile_5:.2f}")
+        table.add_row("95th Percentile", f"${percentile_95:.2f}")
+        table.add_row("Upside Potential", f"{upside_potential:.2f}%")
 
-    # Calculate potential return
-    potential_return_current = (mean_price - current_price) / current_price * 100
-    console.print(f"Potential Return from Current Price {current_price}: [bold green]{potential_return_current:.2f}%[/bold green]")
+        # Create a table for Monte Carlo configuration
+        config_table = Table(title="Monte Carlo Configuration")
+        config_table.add_column("Parameter", style="cyan", no_wrap=True)
+        config_table.add_column("Value", style="magenta")
+        config_table.add_row("Number of Simulations", f"{num_simulations:,}")
+        config_table.add_row("Time Horizon (Trading Days)", f"{time_horizon}")
+        config_table.add_row("Annual Return", f"{annual_return:.4f}")
+        config_table.add_row("Annual Volatility", f"{annual_volatility:.4f}")
 
-    # Plot results with improved visualization
-    plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, percentile_5, percentile_95, ticker)
+        layout = Layout()
+        layout.split_row(
+            Layout(name="table", ratio=2),
+            Layout(name="config_table", ratio=1)
+        )
+        layout["table"].update(Panel(table, title=f"Monte Carlo Analysis for {ticker}"))
+        layout["config_table"].update(Panel(config_table))
+
+        console.print(layout)
+
+        # Calculate potential return
+        potential_return_current = (mean_price - current_price) / current_price * 100
+        console.print(f"Potential Return from Current Price {current_price}: [bold green]{potential_return_current:.2f}%[/bold green]")
+
+        # Plot results with improved visualization
+        plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, percentile_5, percentile_95, ticker)
 
 if __name__ == '__main__':
     main()
