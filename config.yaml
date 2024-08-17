@@ -1,9 +1,12 @@
 stocks:
-  - ticker: "META"
+  - ticker: "MSFT"
     start_date: "2020-01-01"
     end_date: "2024-08-07"
-  - ticker: "AAPL"
+  - ticker: "AMZN"
     start_date: "2020-01-01"
     end_date: "2024-08-07"
-num_simulations: 5000000
-time_horizon: 252  # One trading year
+  - ticker: "NVDA"
+    start_date: "2020-01-01"
+    end_date: "2024-08-07"
+num_simulations: 20
+time_horizon: 252  

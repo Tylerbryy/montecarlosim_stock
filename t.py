@@ -35,7 +35,7 @@ def simulate_price_path(key, params, time_horizon):
     daily_returns = random.normal(key, shape=(time_horizon,)) * (annual_volatility/jnp.sqrt(252)) + (annual_return/252)
     return last_price * jnp.exp(jnp.cumsum(daily_returns))
 
-def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, median_price, std_dev, percentile_5, percentile_95, upside_potential, ticker, num_simulations):
+def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, percentile_5, percentile_95, ticker):
     """
     Plot the results of the Monte Carlo simulation.
 
@@ -44,13 +44,9 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
     time_horizon (int): Number of days simulated
     current_price (float): Current stock price
     mean_price (float): Mean projected price
-    median_price (float): Median projected price
-    std_dev (float): Standard deviation of projected prices
     percentile_5 (float): 5th percentile of projected prices
     percentile_95 (float): 95th percentile of projected prices
-    upside_potential (float): Upside potential in percentage
     ticker (str): Stock ticker symbol
-    num_simulations (int): Number of simulations run
     """
     present_date = datetime.now().date()
     date_range = pd.date_range(start=present_date, periods=time_horizon, freq='B')
@@ -74,9 +70,9 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
     ax.axhline(y=percentile_95, color='purple', linestyle='--', linewidth=2, label='95th Percentile')
     ax.axhline(y=current_price, color='orange', linestyle='-', linewidth=2, label='Current Price')
 
-    ax.set_title(f'Monte Carlo Simulation: {ticker} Stock Price Projection\n(Number of Simulations: {num_simulations})', fontsize=18, fontweight='bold')
-    ax.set_xlabel('Date', fontsize=16)
-    ax.set_ylabel('Stock Price ($)', fontsize=16)
+    ax.set_title(f'Monte Carlo Simulation: {ticker} Stock Price Projection', fontsize=20, fontweight='bold')
+    ax.set_xlabel('Date', fontsize=14)
+    ax.set_ylabel('Stock Price ($)', fontsize=14)
     
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
     ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
@@ -92,20 +88,18 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
         (0.90, f'Mean Projected Price: ${mean_price:.2f}', 'green'),
         (0.85, f'5th Percentile: ${percentile_5:.2f}', 'red'),
         (0.80, f'95th Percentile: ${percentile_95:.2f}', 'purple'),
-        (0.75, f'Median Projection: ${median_projection[-1]:.2f}', 'blue'),
-        (0.70, f'Standard Deviation: ${std_dev:.2f}', 'black'),
-        (0.65, f'Upside Potential: {upside_potential:.2f}%', 'brown')
+        (0.75, f'Median Projection: ${median_projection[-1]:.2f}', 'blue')
     ]
     
     for y, text, color in stats:
-        ax.text(0.95, y, text, transform=ax.transAxes, fontsize=14, va='top', ha='right', 
+        ax.text(0.95, y, text, transform=ax.transAxes, fontsize=12, va='top', ha='right', 
                 bbox=dict(facecolor='white', edgecolor=color, alpha=0.8))
 
-    ax.legend(loc='upper left', bbox_to_anchor=(0.05, 0.95), fontsize=14, 
+    ax.legend(loc='upper left', bbox_to_anchor=(0.05, 0.95), fontsize=12, 
               fancybox=True, shadow=True, ncol=1)
 
     ax.text(0.5, 0.02, f'Future Price Projections ({time_horizon} trading days)', transform=ax.transAxes, 
-            fontsize=18, color='red', ha='center', va='bottom',
+            fontsize=16, color='red', ha='center', va='bottom',
             bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
 
     plt.tight_layout()
@@ -299,7 +293,7 @@ def main():
         potential_return_current = (mean_price - current_price) / current_price * 100
         console.print(f"Potential Return from Current Price {current_price}: [bold green]{potential_return_current:.2f}%[/bold green]")
 
-        plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, median_price, std_dev, percentile_5, percentile_95, upside_potential, ticker, num_simulations)
+        plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, percentile_5, percentile_95, ticker)
 
 if __name__ == '__main__':
     main()
