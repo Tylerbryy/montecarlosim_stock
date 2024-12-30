@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Stock Monte Carlo Simulation</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .charts-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(900px, 1fr));
+            gap: 30px;
+            padding: 20px;
+        }
+        .chart-wrapper {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.12);
+            padding: 25px;
+            transition: all 0.3s ease;
+        }
+        .chart-wrapper:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0,0,0,0.15);
+        }
+        .chart {
+            width: 100%;
+            height: 600px;
+            margin-top: 20px;
+        }
+        .stats-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 25px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+        }
+        .stat-item {
+            padding: 15px;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            transition: all 0.3s ease;
+        }
+        .stat-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+        }
+        .stat-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            z-index: 1000;
+        }
+        .error-message {
+            color: #e74c3c;
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+        }
+        .export-button {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 12px 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+        .export-button:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">Loading simulation data...</div>
+    <div class="charts-container" id="chartsContainer"></div>
+    
+    <button id="exportButton" class="export-button">Export Data</button>
+
+    <script>
+        async function fetchData() {
+            try {
+                // For the live version, fetch from server
+                const response = await fetch('/simulation-data');
+                return await response.json();
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                throw error;
+            }
+        }
+
+        function createChartOption(stockData) {
+            const legendData = ['Simulations', 'Median Projection', 'Confidence Interval'];
+            
+            return {
+                title: {
+                    text: `Monte Carlo Simulation: ${stockData.ticker}`,
+                    left: 'center',
+                    top: 10,
+                    textStyle: {
+                        fontSize: 24,
+                        fontWeight: 'bold',
+                        color: '#2c3e50'
+                    }
+                },
+                legend: {
+                    data: legendData,
+                    top: 50,
+                    padding: [15, 25],
+                    itemGap: 30,
+                    textStyle: {
+                        fontSize: 14,
+                        color: '#666'
+                    },
+                    formatter: name => `  ${name}  `,
+                    selectedMode: true
+                },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'cross',
+                        animation: false,
+                        label: {
+                            backgroundColor: '#6a7985'
+                        }
+                    },
+                    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                    borderColor: '#ccc',
+                    borderWidth: 1,
+                    textStyle: {
+                        color: '#333'
+                    },
+                    formatter: function(params) {
+                        const date = new Date(params[0].axisValue);
+                        let result = `<div style="font-weight: bold; margin-bottom: 5px;">
+                            ${date.toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                            })}
+                        </div>`;
+                        
+                        params.forEach(param => {
+                            if (param.seriesName !== 'Simulations') {
+                                result += `<div style="display: flex; justify-content: space-between; margin: 3px 0;">
+                                    <span style="margin-right: 15px;">${param.seriesName}:</span>
+                                    <span style="font-weight: bold;">$${param.value.toFixed(2)}</span>
+                                </div>`;
+                            }
+                        });
+                        return result;
+                    }
+                },
+                toolbox: {
+                    feature: {
+                        dataZoom: {
+                            yAxisIndex: 'none',
+                            title: {
+                                zoom: 'Area Zoom',
+                                back: 'Restore Zoom'
+                            }
+                        },
+                        restore: {
+                            title: 'Restore'
+                        },
+                        saveAsImage: {
+                            title: 'Save Image'
+                        }
+                    },
+                    right: '10%',
+                    top: 15
+                },
+                dataZoom: [
+                    {
+                        type: 'slider',
+                        start: 0,
+                        end: 100,
+                        bottom: 10,
+                        borderColor: '#ccc',
+                        textStyle: {
+                            color: '#666'
+                        },
+                        handleSize: '80%',
+                        handleStyle: {
+                            color: '#fff',
+                            shadowBlur: 3,
+                            shadowColor: 'rgba(0, 0, 0, 0.2)',
+                            shadowOffsetX: 2,
+                            shadowOffsetY: 2
+                        }
+                    },
+                    {
+                        type: 'inside',
+                        start: 0,
+                        end: 100
+                    }
+                ],
+                grid: {
+                    left: '5%',
+                    right: '5%',
+                    top: '120px',
+                    bottom: '15%',
+                    containLabel: true
+                },
+                xAxis: {
+                    type: 'category',
+                    data: stockData.dates,
+                    boundaryGap: false,
+                    axisLabel: {
+                        formatter: (value) => {
+                            const date = new Date(value);
+                            return date.toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric'
+                            });
+                        },
+                        rotate: 45,
+                        margin: 15,
+                        color: '#666'
+                    },
+                    axisLine: {
+                        lineStyle: {
+                            color: '#ccc'
+                        }
+                    },
+                    splitLine: {
+                        show: true,
+                        lineStyle: {
+                            color: ['#eee'],
+                            type: 'dashed'
+                        }
+                    }
+                },
+                yAxis: {
+                    type: 'value',
+                    axisLabel: {
+                        formatter: value => `$${value.toFixed(2)}`,
+                        color: '#666'
+                    },
+                    splitLine: {
+                        show: true,
+                        lineStyle: {
+                            color: ['#eee'],
+                            type: 'dashed'
+                        }
+                    },
+                    scale: true,
+                    splitNumber: 8,
+                    min: (value) => value.min * 0.9,
+                    max: (value) => value.max * 1.1
+                },
+                series: [
+                    {
+                        name: 'Simulations',
+                        type: 'line',
+                        data: stockData.simulations.slice(0, 50).map(sim => ({
+                            value: sim,
+                            lineStyle: { opacity: 0.1 }
+                        })),
+                        lineStyle: {
+                            opacity: 0.1,
+                            width: 0.5,
+                            color: '#5470c6'
+                        },
+                        symbol: 'none',
+                        sampling: 'lttb'
+                    },
+                    {
+                        name: 'Median Projection',
+                        type: 'line',
+                        data: stockData.median_projection,
+                        lineStyle: {
+                            width: 3,
+                            color: '#5470c6'
+                        },
+                        symbol: 'none',
+                        smooth: true,
+                        z: 5,
+                        emphasis: {
+                            focus: 'series',
+                            lineStyle: {
+                                width: 4
+                            }
+                        }
+                    },
+                    {
+                        name: 'Confidence Interval',
+                        type: 'line',
+                        data: stockData.percentile_5,
+                        lineStyle: { width: 0 },
+                        areaStyle: {
+                            opacity: 0.3,
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(77, 119, 255, 0.5)' },
+                                { offset: 1, color: 'rgba(160, 180, 255, 0.5)' }
+                            ])
+                        },
+                        stack: 'confidence',
+                        symbol: 'none',
+                        smooth: true
+                    },
+                    {
+                        name: 'Confidence Interval',
+                        type: 'line',
+                        data: stockData.percentile_95,
+                        lineStyle: { width: 0 },
+                        areaStyle: {
+                            opacity: 0.3,
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: 'rgba(77, 119, 255, 0.5)' },
+                                { offset: 1, color: 'rgba(160, 180, 255, 0.5)' }
+                            ])
+                        },
+                        stack: 'confidence',
+                        symbol: 'none',
+                        smooth: true
+                    }
+                ],
+                animation: false
+            };
+        }
+
+        function createStatsPanel(stockData) {
+            const stats = [
+                {
+                    label: 'Current Price',
+                    value: `$${stockData.current_price.toFixed(2)}`,
+                    trend: null
+                },
+                {
+                    label: 'Mean Projected',
+                    value: `$${stockData.mean_price.toFixed(2)}`,
+                    trend: stockData.mean_price > stockData.current_price ? 'up' : 'down'
+                },
+                {
+                    label: 'Standard Deviation',
+                    value: `$${stockData.std_dev.toFixed(2)}`,
+                    trend: null
+                },
+                {
+                    label: 'Upside Potential',
+                    value: `${stockData.upside_potential.toFixed(2)}%`,
+                    trend: stockData.upside_potential > 0 ? 'up' : 'down'
+                }
+            ];
+
+            const getTrendIcon = (trend) => {
+                if (!trend) return '';
+                return trend === 'up' 
+                    ? '<span style="color: #2ecc71;">↑</span>' 
+                    : '<span style="color: #e74c3c;">↓</span>';
+            };
+
+            const statsHtml = stats.map(stat => `
+                <div class="stat-item">
+                    <div class="stat-label">${stat.label}</div>
+                    <div class="stat-value">
+                        ${stat.value} ${getTrendIcon(stat.trend)}
+                    </div>
+                </div>
+            `).join('');
+
+            return `<div class="stats-panel">${statsHtml}</div>`;
+        }
+
+        function exportData(stocksData) {
+            if (!window.JSZip) {
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+                document.head.appendChild(script);
+                
+                script.onload = () => doExport(stocksData);
+                return;
+            }
+            
+            doExport(stocksData);
+        }
+
+        async function doExport(stocksData) {
+            const zip = new JSZip();
+            const timestamp = new Date().toISOString().split('T')[0];
+            const folderName = `stock_projections_${timestamp}`;
+            
+            // Create standalone HTML with embedded data and offline fetchData
+            let standaloneHtml = document.documentElement.outerHTML;
+            
+            // Replace the fetchData function with a more precise regex
+            standaloneHtml = standaloneHtml.replace(
+                /async function fetchData\(\) {[\s\S]*?try[\s\S]*?catch[\s\S]*?}[\s\S]*?}/,
+                `async function fetchData() {
+                    // Static data for offline version
+                    return ${JSON.stringify(stocksData, null, 2)};
+                }`
+            );
+            
+            // Add files to zip
+            zip.file(`${folderName}/data.json`, JSON.stringify({
+                exportDate: new Date().toISOString(),
+                stocks: stocksData.map(stock => ({
+                    ticker: stock.ticker,
+                    currentPrice: stock.current_price,
+                    meanPrice: stock.mean_price,
+                    standardDeviation: stock.std_dev,
+                    upsidePotential: stock.upside_potential,
+                    dates: stock.dates,
+                    medianProjection: stock.median_projection,
+                    percentile5: stock.percentile_5,
+                    percentile95: stock.percentile_95
+                }))
+            }, null, 2));
+            zip.file(`${folderName}/visualization.html`, standaloneHtml);
+            
+            // Generate and download zip
+            const blob = await zip.generateAsync({type: "blob"});
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${folderName}.zip`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+
+        async function initCharts() {
+            try {
+                const stocksData = await fetchData();
+                const container = document.getElementById('chartsContainer');
+                
+                // Clear any existing charts
+                container.innerHTML = '';
+                
+                stocksData.forEach(stockData => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'chart-wrapper';
+                    
+                    const chartDiv = document.createElement('div');
+                    chartDiv.className = 'chart';
+                    wrapper.appendChild(chartDiv);
+                    
+                    wrapper.insertAdjacentHTML('beforeend', createStatsPanel(stockData));
+                    container.appendChild(wrapper);
+                    
+                    const chart = echarts.init(chartDiv);
+                    chart.setOption(createChartOption(stockData));
+                    
+                    // Handle resize
+                    const resizeObserver = new ResizeObserver(() => {
+                        chart.resize();
+                    });
+                    resizeObserver.observe(chartDiv);
+                });
+
+                document.getElementById('exportButton').addEventListener('click', () => {
+                    exportData(stocksData);
+                });
+            } catch (error) {
+                console.error('Error initializing charts:', error);
+                const container = document.getElementById('chartsContainer');
+                container.innerHTML = `
+                    <div class="error-message">
+                        An error occurred while loading the simulation data. 
+                        Please refresh the page or try again later.
+                    </div>
+                `;
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Initialize charts when DOM is ready
+        document.addEventListener('DOMContentLoaded', initCharts);
+    </script>
+</body>
+</html>

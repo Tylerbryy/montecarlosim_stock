@@ -8,5 +8,11 @@ stocks:
   - ticker: "NVDA"
     start_date: "2020-01-01"
     end_date: "2024-08-07"
-num_simulations: 20
-time_horizon: 252  
+  - ticker: "CRSP"
+    start_date: "2020-01-01"
+    end_date: "2024-08-07"
+  - ticker: "MU"
+    start_date: "2020-01-01"
+    end_date: "2024-08-07"
+num_simulations: 45000000
+time_horizon: 252

@@ -13,10 +13,20 @@ from functools import partial
 from datetime import datetime
 import pandas as pd
 import yaml
+import os
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
+import json
 
 console = Console()
 
 plt.style.use("seaborn-v0_8-muted")
+
+# Initialize FastAPI
+app = FastAPI()
+templates = Jinja2Templates(directory="templates")
 
 @partial(jit, static_argnums=(2,))
 def simulate_price_path(key, params, time_horizon):
@@ -109,7 +119,11 @@ def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_pric
             bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
 
     plt.tight_layout()
-    fig.savefig(f"{ticker}_monte_carlo_projection.png", dpi=300, bbox_inches='tight')
+    # Create plots directory if it doesn't exist
+    os.makedirs('plots', exist_ok=True)
+    
+    # Save to plots directory
+    fig.savefig(f"plots/{ticker}_monte_carlo_projection.png", dpi=300, bbox_inches='tight')
 
 def load_config(file_path):
     """
@@ -260,46 +274,53 @@ def create_config_table(num_simulations, time_horizon, annual_return, annual_vol
 
     return config_table
 
-def main():
-    config = load_config("config.yaml")
-    num_simulations = config['num_simulations']
-    time_horizon = config['time_horizon']
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    return templates.TemplateResponse("index.html", {"request": request})
 
+@app.get("/simulation-data")
+async def simulation_data():
+    config = load_config("config.yaml")
+    all_stocks_data = []
+    
     for stock_config in config['stocks']:
         ticker = stock_config['ticker']
-        start_date = stock_config['start_date']
-        end_date = stock_config['end_date']
-
-        hist, current_price = get_stock_data(ticker, start_date, end_date)
+        hist, current_price = get_stock_data(ticker, stock_config['start_date'], stock_config['end_date'])
         if hist is None or current_price is None:
             continue
-
+            
         log_returns, annual_return, annual_volatility = calculate_returns(hist)
         last_price = hist['Close'].iloc[-1]
-
+        
         params = (annual_return, annual_volatility, last_price)
-        simulations = run_monte_carlo(params, num_simulations, time_horizon)
-
+        simulations = run_monte_carlo(params, config['num_simulations'], config['time_horizon'])
+        
         mean_price, median_price, std_dev, percentile_5, percentile_95 = calculate_statistics(simulations)
         upside_potential = (mean_price - current_price) / current_price * 100
+        
+        present_date = datetime.now().date()
+        date_range = pd.date_range(start=present_date, periods=config['time_horizon'], freq='B')
+        dates = date_range.strftime('%Y-%m-%d').tolist()
+        
+        all_stocks_data.append({
+            "ticker": ticker,
+            "dates": dates,
+            "simulations": simulations.tolist(),
+            "median_projection": np.median(simulations, axis=0).tolist(),
+            "mean_price": float(mean_price),
+            "current_price": float(current_price),
+            "percentile_5": np.percentile(simulations, 5, axis=0).tolist(),
+            "percentile_95": np.percentile(simulations, 95, axis=0).tolist(),
+            "std_dev": float(std_dev),
+            "upside_potential": float(upside_potential),
+            "last_price": float(last_price)
+        })
+    
+    return all_stocks_data
 
-        results_table = create_results_table(ticker, current_price, last_price, mean_price, median_price, std_dev, percentile_5, percentile_95, upside_potential)
-        config_table = create_config_table(num_simulations, time_horizon, annual_return, annual_volatility)
-
-        layout = Layout()
-        layout.split_row(
-            Layout(name="table", ratio=2),
-            Layout(name="config_table", ratio=1)
-        )
-        layout["table"].update(Panel(results_table, title=f"Monte Carlo Analysis for {ticker}"))
-        layout["config_table"].update(Panel(config_table))
-
-        console.print(layout)
-
-        potential_return_current = (mean_price - current_price) / current_price * 100
-        console.print(f"Potential Return from Current Price {current_price}: [bold green]{potential_return_current:.2f}%[/bold green]")
-
-        plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, median_price, std_dev, percentile_5, percentile_95, upside_potential, ticker, num_simulations)
+def main():
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 if __name__ == '__main__':
     main()
