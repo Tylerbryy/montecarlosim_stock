@@ -16,7 +16,7 @@ import yaml
 from sklearn.linear_model import LinearRegression, Ridge, Lasso
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, root_mean_squared_error
 from sklearn.model_selection import train_test_split
 from scipy.stats import norm
 from statsmodels.tsa.stattools import adfuller
@@ -48,127 +48,103 @@ def simulate_price_path(key, params, time_horizon):
 
 def plot_monte_carlo_results(simulations, time_horizon, current_price, mean_price, median_price, std_dev, percentile_5, percentile_95, upside_potential, ticker, num_simulations, run_dir, ml_metrics=None):
     """
-    Plot the results of the Monte Carlo simulation.
-
-    Args:
-    simulations (np.array): Array of simulated price paths
-    time_horizon (int): Number of days simulated
-    current_price (float): Current stock price
-    mean_price (float): Mean projected price
-    median_price (float): Median projected price
-    std_dev (float): Standard deviation of projected prices
-    percentile_5 (float): 5th percentile of projected prices
-    percentile_95 (float): 95th percentile of projected prices
-    upside_potential (float): Upside potential in percentage
-    ticker (str): Stock ticker symbol
-    num_simulations (int): Number of simulations run
-    run_dir (str): Directory to save the plot
-    ml_metrics (dict): Machine learning metrics
-
-    Returns:
-    str: Path to saved plot
+    Plot the results of the Monte Carlo simulation with enhanced visualization.
     """
     present_date = datetime.now().date()
     date_range = pd.date_range(start=present_date, periods=time_horizon, freq='B')
 
+    # Create figure with custom style
+    plt.style.use('seaborn-v0_8-darkgrid')
     fig, ax = plt.subplots(figsize=(20, 12))
     
     # Plot a subset of simulations for better performance
     subset_size = min(1000, simulations.shape[0])
     ax.plot(date_range, simulations[:subset_size].T, alpha=0.02, color='lightgray')
     
+    # Calculate key price levels
     median_projection = np.median(simulations, axis=0)
-    ax.plot(date_range, median_projection, color='blue', linewidth=2, label='Median Projection')
+    upper_band = np.percentile(simulations, 95, axis=0)
+    lower_band = np.percentile(simulations, 5, axis=0)
     
-    ax.fill_between(date_range, 
-                    np.percentile(simulations, 5, axis=0), 
-                    np.percentile(simulations, 95, axis=0), 
+    # Plot main price bands with enhanced styling
+    ax.fill_between(date_range, lower_band, upper_band, 
                     color='skyblue', alpha=0.3, label='90% Confidence Interval')
-
-    ax.axhline(y=mean_price, color='green', linestyle='--', linewidth=2, label='Mean Projected Price')
-    ax.axhline(y=percentile_5, color='red', linestyle='--', linewidth=2, label='5th Percentile')
-    ax.axhline(y=percentile_95, color='purple', linestyle='--', linewidth=2, label='95th Percentile')
-    ax.axhline(y=current_price, color='orange', linestyle='-', linewidth=2, label='Current Price')
-
-    ax.set_title(f'Monte Carlo Simulation: {ticker} Stock Price Projection\n(Number of Simulations: {num_simulations})', fontsize=18, fontweight='bold')
-    ax.set_xlabel('Date', fontsize=16)
-    ax.set_ylabel('Stock Price ($)', fontsize=16)
+    ax.plot(date_range, median_projection, color='#2E86C1', linewidth=3, 
+            label='Median Projection', zorder=5)
     
+    # Add horizontal reference lines with improved styling
+    ax.axhline(y=current_price, color='#E74C3C', linestyle='-', linewidth=2, 
+               label='Current Price', zorder=4)
+    ax.axhline(y=mean_price, color='#27AE60', linestyle='--', linewidth=2, 
+               label='Mean Projection', zorder=3)
+    ax.axhline(y=percentile_5, color='#8E44AD', linestyle=':', linewidth=2, 
+               label='5th Percentile', zorder=2)
+    ax.axhline(y=percentile_95, color='#F39C12', linestyle=':', linewidth=2, 
+               label='95th Percentile', zorder=2)
+
+    # Enhanced title and labels
+    ax.set_title(f'{ticker} Monte Carlo Price Projection\n'
+                 f'Simulation Period: {present_date.strftime("%Y-%m-%d")} to '
+                 f'{(present_date + pd.Timedelta(days=time_horizon)).strftime("%Y-%m-%d")}',
+                 fontsize=18, fontweight='bold', pad=20)
+    ax.set_xlabel('Date', fontsize=14, labelpad=10)
+    ax.set_ylabel('Stock Price ($)', fontsize=14, labelpad=10)
+    
+    # Format x-axis dates
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m-%d'))
-    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=1))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
     ax.set_xlim(date_range[0], date_range[-1])
-    fig.autofmt_xdate()
+    fig.autofmt_xdate(rotation=45, ha='right')
 
+    # Format y-axis with dollar signs and thousands separators
     ax.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f'${x:,.0f}'))
-    ax.grid(True, linestyle='--', alpha=0.7)
-
-    # Add text annotations for key stats with indicators
-    upside_indicator = "↑" if upside_potential > 0 else "↓"
-    volatility_indicator = "↓" if std_dev/current_price < 0.3 else "↑"  # Lower volatility is generally better
-    price_trend = "↑" if mean_price > current_price else "↓"
     
-    stats = [
-        (0.95, f'Current Price: ${current_price:.2f}', 'orange', ''),
-        (0.90, f'Mean Projected Price: ${mean_price:.2f} {price_trend}', 'green' if mean_price > current_price else 'red', 
-         '(Bullish)' if mean_price > current_price else '(Bearish)'),
-        (0.85, f'5th Percentile: ${percentile_5:.2f}', 'red', '(Worst Case)'),
-        (0.80, f'95th Percentile: ${percentile_95:.2f}', 'purple', '(Best Case)'),
-        (0.75, f'Median Projection: ${median_projection[-1]:.2f} {price_trend}', 'blue', 
-         '(Bullish)' if median_projection[-1] > current_price else '(Bearish)'),
-        (0.70, f'Volatility: ${std_dev:.2f} {volatility_indicator}', 
-         'green' if std_dev/current_price < 0.3 else 'red', 
-         '(Low Risk)' if std_dev/current_price < 0.3 else '(High Risk)'),
-        (0.65, f'Upside Potential: {upside_potential:.2f}% {upside_indicator}', 
-         'green' if upside_potential > 0 else 'red',
-         '(Buy Signal)' if upside_potential > 10 else '(Hold)' if upside_potential > 0 else '(Sell Signal)')
+    # Add grid with custom styling
+    ax.grid(True, linestyle='--', alpha=0.7, color='gray')
+    
+    # Calculate and display key statistics
+    stats_text = [
+        f'Current Price: ${current_price:,.2f}',
+        f'Mean Projection: ${mean_price:,.2f} ({((mean_price/current_price)-1)*100:+.2f}%)',
+        f'Median Projection: ${median_projection[-1]:,.2f} ({((median_projection[-1]/current_price)-1)*100:+.2f}%)',
+        f'5th Percentile: ${percentile_5:,.2f} ({((percentile_5/current_price)-1)*100:+.2f}%)',
+        f'95th Percentile: ${percentile_95:,.2f} ({((percentile_95/current_price)-1)*100:+.2f}%)',
+        f'Standard Deviation: ${std_dev:,.2f}',
+        f'Upside Potential: {upside_potential:+.2f}%',
+        f'Number of Simulations: {num_simulations:,}'
     ]
     
     # Add ML metrics if available
     if ml_metrics:
-        ml_stats = [
-            (0.60, f"ML Model Performance:", 'black', ''),
-            (0.55, f"Linear Regression R²: {ml_metrics['Linear']['R2']:.4f} {'↑' if ml_metrics['Linear']['R2'] > 0.7 else '↓'}", 
-             'green' if ml_metrics['Linear']['R2'] > 0.7 else 'red',
-             '(Good Fit)' if ml_metrics['Linear']['R2'] > 0.7 else '(Poor Fit)'),
-            (0.50, f"Ridge R²: {ml_metrics['Ridge']['R2']:.4f} {'↑' if ml_metrics['Ridge']['R2'] > 0.7 else '↓'}", 
-             'green' if ml_metrics['Ridge']['R2'] > 0.7 else 'red',
-             '(Good Fit)' if ml_metrics['Ridge']['R2'] > 0.7 else '(Poor Fit)'),
-            (0.45, f"Lasso R²: {ml_metrics['Lasso']['R2']:.4f} {'↑' if ml_metrics['Lasso']['R2'] > 0.7 else '↓'}", 
-             'green' if ml_metrics['Lasso']['R2'] > 0.7 else 'red',
-             '(Good Fit)' if ml_metrics['Lasso']['R2'] > 0.7 else '(Poor Fit)'),
-            (0.40, f"Random Forest R²: {ml_metrics['RandomForest']['R2']:.4f} {'↑' if ml_metrics['RandomForest']['R2'] > 0.7 else '↓'}", 
-             'green' if ml_metrics['RandomForest']['R2'] > 0.7 else 'red',
-             '(Good Fit)' if ml_metrics['RandomForest']['R2'] > 0.7 else '(Poor Fit)')
-        ]
-        stats.extend(ml_stats)
-
-    # Modified text box rendering to include interpretation
-    for y, text, color, interpretation in stats:
-        if interpretation:
-            text = f"{text} {interpretation}"
-        ax.text(0.95, y, text, transform=ax.transAxes, fontsize=14, va='top', ha='right', 
-                bbox=dict(facecolor='white', edgecolor=color, alpha=0.8))
-
-    # Add legend explaining indicators
-    ax.text(0.02, 0.02, 
-            "Indicators Guide:\n"
-            "↑ = Positive/Bullish Signal\n"
-            "↓ = Negative/Bearish Signal\n"
-            "R² > 0.7 = Good Model Fit\n"
-            "Volatility < 30% = Lower Risk",
-            transform=ax.transAxes, fontsize=12, va='bottom', ha='left',
-            bbox=dict(facecolor='white', edgecolor='black', alpha=0.8))
-
-    ax.legend(loc='upper left', bbox_to_anchor=(0.05, 0.95), fontsize=14, 
-              fancybox=True, shadow=True, ncol=1)
-
-    ax.text(0.5, 0.02, f'Future Price Projections ({time_horizon} trading days)', transform=ax.transAxes, 
-            fontsize=18, color='red', ha='center', va='bottom',
-            bbox=dict(facecolor='white', edgecolor='red', alpha=0.8))
-
+        stats_text.extend([
+            '\nMachine Learning Metrics:',
+            f"Linear Regression R²: {ml_metrics['Linear']['R2']:.4f}",
+            f"Ridge R²: {ml_metrics['Ridge']['R2']:.4f}",
+            f"Lasso R²: {ml_metrics['Lasso']['R2']:.4f}",
+            f"Random Forest R²: {ml_metrics['RandomForest']['R2']:.4f}"
+        ])
+    
+    # Add statistics box with improved styling
+    stats_box = ax.text(0.02, 0.98, '\n'.join(stats_text),
+                       transform=ax.transAxes, fontsize=12,
+                       verticalalignment='top', horizontalalignment='left',
+                       bbox=dict(facecolor='white', edgecolor='gray',
+                               alpha=0.9, boxstyle='round,pad=0.5'))
+    
+    # Add legend with improved positioning and styling
+    ax.legend(loc='upper right', bbox_to_anchor=(0.98, 0.98),
+              fontsize=12, framealpha=0.9, shadow=True)
+    
+    # Add watermark
+    fig.text(0.5, 0.5, 'Monte Carlo Simulation',
+            fontsize=50, color='gray', alpha=0.1,
+            ha='center', va='center', rotation=30)
+    
+    # Adjust layout and save
     plt.tight_layout()
     plot_path = os.path.join(run_dir, f"{ticker}_monte_carlo_projection.png")
-    fig.savefig(plot_path, dpi=300, bbox_inches='tight')
+    fig.savefig(plot_path, dpi=300, bbox_inches='tight', facecolor='white')
+    plt.close()
     return plot_path
 
 def load_config(file_path):
@@ -406,7 +382,7 @@ def train_ml_models(hist, time_horizon):
         predictions[name] = pred
         metrics[name] = {
             'R2': r2_score(y_test, pred),
-            'RMSE': mean_squared_error(y_test, pred, squared=False)
+            'RMSE': root_mean_squared_error(y_test, pred)
         }
         
         if name == 'RandomForest':
